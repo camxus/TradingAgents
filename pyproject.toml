@@ -42,6 +42,7 @@ dev = [
 
 server = [
     "flask>=3.0.0",
+    "flask-sock>=0.7.0",
 ]
 
 # Amazon Bedrock support (AWS SigV4 auth + boto3). Optional so the core install
