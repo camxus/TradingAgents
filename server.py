@@ -8,33 +8,49 @@ from flask_sock import Sock
 app = Flask(__name__)
 sock = Sock(app)
 
-# spawn CLI in a real pseudo-terminal
 master_fd, slave_fd = pty.openpty()
 
+# 🔥 global history buffer
+history = []
+
 proc = subprocess.Popen(
-    ["tradingagents"],   # your CLI
+    ["tradingagents"],
     stdin=slave_fd,
     stdout=slave_fd,
     stderr=slave_fd,
-    text=True,
+    text=False,
     bufsize=0
 )
 
 @sock.route("/ws")
-def ws(sock):
+def ws(ws):
+
+    # 🔥 1. send full history on connect
+    for chunk in history:
+        ws.send(chunk)
+
     while True:
-        # read CLI output
         r, _, _ = select.select([master_fd], [], [], 0.1)
 
         if master_fd in r:
-            output = os.read(master_fd, 1024).decode(errors="ignore")
-            if output:
-                sock.send(output)
+            try:
+                output = os.read(master_fd, 1024).decode(errors="ignore")
+            except OSError:
+                break
 
-        # receive browser input
-        msg = sock.receive()
+            if output:
+                # 🔥 store history
+                history.append(output)
+
+                # optional safety limit (avoid memory leak)
+                if len(history) > 5000:
+                    history.pop(0)
+
+                ws.send(output)
+
+        msg = ws.receive()
         if msg:
-            os.write(master_fd, msg.encode() + b"\n")
+            os.write(master_fd, msg.encode())
 
 
 @app.get("/")
