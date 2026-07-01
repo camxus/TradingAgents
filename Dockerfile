@@ -15,7 +15,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY . .
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[server]"
 
 # ---- runtime image ----
 FROM python:3.12-slim
