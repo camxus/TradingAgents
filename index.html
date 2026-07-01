@@ -8,39 +8,72 @@
   <script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
 
   <style>
-    body { margin: 0; background: black; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: black;
+      overflow: hidden;
+    }
 
-    .xterm-screen { width: 100% ! important; height: 100% ! important; }
-    
-    .terminal { width: 100% ! important; height: 100% ! important; }
-    
-    #terminal { height: 100vh; width: 100vw; }
+    #terminal {
+      height: 100vh;
+      width: 100vw;
+    }
   </style>
 </head>
+
 <body>
 <div id="terminal"></div>
 
 <script>
 const term = new Terminal({
   cursorBlink: true,
-  fontFamily: "monospace"
+  fontFamily: "monospace",
+  scrollback: 5000,
+  convertEol: true,
 });
 
 term.open(document.getElementById("terminal"));
 
+// WebSocket (Cloud Run safe: wss/https aware)
 const ws = new WebSocket(
   (location.protocol === "https:" ? "wss://" : "ws://") +
   location.host +
   "/ws"
 );
 
+// Track whether user is at bottom
+function isAtBottom() {
+  const buffer = term.buffer.active;
+  return buffer.viewportY + term.rows >= buffer.length - 1;
+}
+
 ws.onmessage = (event) => {
+  const shouldScroll = isAtBottom();
+
   term.write(event.data);
+
+  // Only auto-scroll if user hasn't scrolled up
+  if (shouldScroll) {
+    term.scrollToBottom();
+  }
 };
 
-term.onData(data => {
-  ws.send(data);
+ws.onopen = () => {
+  term.write("\r\n\x1b[32mConnected\x1b[0m\r\n");
+};
+
+ws.onclose = () => {
+  term.write("\r\n\x1b[31mDisconnected\x1b[0m\r\n");
+};
+
+// Send keyboard input to backend
+term.onData((data) => {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(data);
+  }
 });
 </script>
+
 </body>
 </html>
